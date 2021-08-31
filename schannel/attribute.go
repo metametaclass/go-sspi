@@ -11,6 +11,7 @@ import (
 	"unsafe"
 
 	"github.com/alexbrainman/sspi"
+	"github.com/pkg/errors"
 )
 
 // TODO: maybe move all these into a separate package or something
@@ -22,7 +23,7 @@ func (c *Client) streamSizes() (*_SecPkgContext_StreamSizes, error) {
 	var ss _SecPkgContext_StreamSizes
 	ret := sspi.QueryContextAttributes(c.ctx.Handle, _SECPKG_ATTR_STREAM_SIZES, (*byte)(unsafe.Pointer(&ss)))
 	if ret != sspi.SEC_E_OK {
-		return nil, ret
+		return nil, errors.Wrap(ret, "QueryContextAttributes")
 	}
 	return &ss, nil
 }
@@ -31,7 +32,7 @@ func (c *Client) ProtocolInfo() (name string, major, minor uint32, err error) {
 	var pi _SecPkgContext_ProtoInfo
 	ret := sspi.QueryContextAttributes(c.ctx.Handle, _SECPKG_ATTR_PROTO_INFO, (*byte)(unsafe.Pointer(&pi)))
 	if ret != sspi.SEC_E_OK {
-		return "", 0, 0, ret
+		return "", 0, 0, errors.Wrap(ret, "QueryContextAttributes")
 	}
 	defer sspi.FreeContextBuffer((*byte)(unsafe.Pointer(pi.ProtocolName)))
 	s := syscall.UTF16ToString((*[2 << 20]uint16)(unsafe.Pointer(pi.ProtocolName))[:])
@@ -42,7 +43,7 @@ func (c *Client) UserName() (string, error) {
 	var ns _SecPkgContext_Names
 	ret := sspi.QueryContextAttributes(c.ctx.Handle, _SECPKG_ATTR_NAMES, (*byte)(unsafe.Pointer(&ns)))
 	if ret != sspi.SEC_E_OK {
-		return "", ret
+		return "", errors.Wrap(ret, "QueryContextAttributes")
 	}
 	defer sspi.FreeContextBuffer((*byte)(unsafe.Pointer(ns.UserName)))
 	s := syscall.UTF16ToString((*[2 << 20]uint16)(unsafe.Pointer(ns.UserName))[:])
@@ -53,7 +54,7 @@ func (c *Client) AuthorityName() (string, error) {
 	var a _SecPkgContext_Authority
 	ret := sspi.QueryContextAttributes(c.ctx.Handle, _SECPKG_ATTR_AUTHORITY, (*byte)(unsafe.Pointer(&a)))
 	if ret != sspi.SEC_E_OK {
-		return "", ret
+		return "", errors.Wrap(ret, "QueryContextAttributes")
 	}
 	defer sspi.FreeContextBuffer((*byte)(unsafe.Pointer(a.AuthorityName)))
 	s := syscall.UTF16ToString((*[2 << 20]uint16)(unsafe.Pointer(a.AuthorityName))[:])
@@ -64,7 +65,7 @@ func (c *Client) KeyInfo() (sessionKeySize uint32, sigAlg uint32, sigAlgName str
 	var ki _SecPkgContext_KeyInfo
 	ret := sspi.QueryContextAttributes(c.ctx.Handle, _SECPKG_ATTR_KEY_INFO, (*byte)(unsafe.Pointer(&ki)))
 	if ret != sspi.SEC_E_OK {
-		return 0, 0, "", 0, "", ret
+		return 0, 0, "", 0, "", errors.Wrap(ret, "QueryContextAttributes")
 	}
 	defer sspi.FreeContextBuffer((*byte)(unsafe.Pointer(ki.SignatureAlgorithmName)))
 	defer sspi.FreeContextBuffer((*byte)(unsafe.Pointer(ki.EncryptAlgorithmName)))

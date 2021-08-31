@@ -9,6 +9,8 @@ package sspi
 import (
 	"io"
 	"unsafe"
+
+	"github.com/pkg/errors"
 )
 
 func (b *SecBuffer) Set(buftype uint32, data []byte) {
@@ -26,7 +28,11 @@ func (b *SecBuffer) Free() error {
 	if b.Buffer == nil {
 		return nil
 	}
-	return FreeContextBuffer((*byte)(unsafe.Pointer(b.Buffer)))
+	ret := FreeContextBuffer((*byte)(unsafe.Pointer(b.Buffer)))
+	if ret != SEC_E_OK {
+		return errors.Wrap(ret, "FreeContextBuffer")
+	}
+	return nil
 }
 
 func (b *SecBuffer) Bytes() []byte {
@@ -46,7 +52,7 @@ func (b *SecBuffer) WriteAll(w io.Writer) (int, error) {
 		n, err := w.Write(data)
 		total += n
 		if err != nil {
-			return total, err
+			return total, errors.Wrap(err, "Write failed")
 		}
 		if n >= len(data) {
 			break

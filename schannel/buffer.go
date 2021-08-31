@@ -10,6 +10,7 @@ import (
 	"io"
 
 	"github.com/alexbrainman/sspi"
+	"github.com/pkg/errors"
 )
 
 type inputBuffer struct {
@@ -48,7 +49,7 @@ func (ib *inputBuffer) readMore() error {
 	ib.data = ib.data[:cap(ib.data)]
 	n, err := ib.reader.Read(ib.data[n0:])
 	if err != nil {
-		return err
+		return errors.Wrap(err, "Read failed")
 	}
 	ib.data = ib.data[:n0+n]
 	return nil

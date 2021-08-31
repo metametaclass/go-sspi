@@ -7,10 +7,11 @@
 package schannel
 
 import (
-	"errors"
 	"io"
 	"syscall"
 	"unsafe"
+
+	"github.com/pkg/errors"
 
 	"github.com/alexbrainman/sspi"
 )
@@ -37,7 +38,7 @@ func NewClientContext(cred *sspi.Credentials, conn io.ReadWriter) *Client {
 func (c *Client) Handshake(serverName string) error {
 	name, err := syscall.UTF16PtrFromString(serverName)
 	if err != nil {
-		return err
+		return errors.Wrap(err, "UTF16PtrFromString failed")
 	}
 	inBuf := []sspi.SecBuffer{
 		{BufferType: sspi.SECBUFFER_TOKEN},

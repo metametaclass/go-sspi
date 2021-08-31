@@ -29,14 +29,15 @@ func TestSchannel(t *testing.T) {
 	}
 	defer cred.Release()
 
-	conn, err := net.Dial("tcp", "microsoft.com:https")
+	conn, err := net.Dial("tcp", "uedaemon.org:https")
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer conn.Close()
 
 	client := schannel.NewClientContext(cred, conn)
-	err = client.Handshake("microsoft.com")
+	//err = client.Handshake("microsoft.com")
+	err = client.Handshake("uedaemon.org")
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -9,10 +9,11 @@
 package negotiate
 
 import (
-	"errors"
 	"syscall"
 	"time"
 	"unsafe"
+
+	"github.com/pkg/errors"
 
 	"github.com/alexbrainman/sspi"
 	"github.com/alexbrainman/sspi/internal/common"

@@ -11,6 +11,8 @@ import (
 	"syscall"
 	"time"
 	"unsafe"
+
+	"github.com/pkg/errors"
 )
 
 // TODO: add documentation
@@ -32,7 +34,7 @@ func QueryPackageInfo(pkgname string) (*PackageInfo, error) {
 	var pi *SecPkgInfo
 	ret := QuerySecurityPackageInfo(name, &pi)
 	if ret != SEC_E_OK {
-		return nil, ret
+		return nil, errors.Wrap(ret, "QuerySecurityPackageInfo")
 	}
 	defer FreeContextBuffer((*byte)(unsafe.Pointer(pi)))
 
@@ -62,17 +64,17 @@ func AcquireCredentials(principal string, pkgname string, creduse uint32, authda
 		var err error
 		principalName, err = syscall.UTF16PtrFromString(principal)
 		if err != nil {
-			return nil, err
+			return nil, errors.Wrap(err, "UTF16PtrFromString")
 		}
 	}
 	name, err := syscall.UTF16PtrFromString(pkgname)
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, "UTF16PtrFromString")
 	}
 	var c Credentials
 	ret := AcquireCredentialsHandle(principalName, name, creduse, nil, authdata, 0, 0, &c.Handle, &c.expiry)
 	if ret != SEC_E_OK {
-		return nil, ret
+		return nil, errors.Wrap(ret, "AcquireCredentialsHandle")
 	}
 	return &c, nil
 }
@@ -83,7 +85,7 @@ func (c *Credentials) Release() error {
 	}
 	ret := FreeCredentialsHandle(&c.Handle)
 	if ret != SEC_E_OK {
-		return ret
+		return errors.Wrap(ret, "FreeCredentialsHandle")
 	}
 	return nil
 }
@@ -124,13 +126,21 @@ func NewServerContext(cred *Credentials, flags uint32) *Context {
 }
 
 func initialize(c *Context, targname *uint16, h, newh *CtxtHandle, out, in *SecBufferDesc) syscall.Errno {
-	return InitializeSecurityContext(&c.Cred.Handle, h, targname, c.RequestedFlags,
+	ret := InitializeSecurityContext(&c.Cred.Handle, h, targname, c.RequestedFlags,
 		0, SECURITY_NATIVE_DREP, in, 0, newh, out, &c.EstablishedFlags, &c.expiry)
+	if ret != SEC_E_OK {
+		fmt.Println("initialize", ret)
+	}
+	return ret
 }
 
 func accept(c *Context, targname *uint16, h, newh *CtxtHandle, out, in *SecBufferDesc) syscall.Errno {
-	return AcceptSecurityContext(&c.Cred.Handle, h, in, c.RequestedFlags,
+	ret := AcceptSecurityContext(&c.Cred.Handle, h, in, c.RequestedFlags,
 		SECURITY_NATIVE_DREP, newh, out, &c.EstablishedFlags, &c.expiry)
+	if ret != SEC_E_OK {
+		fmt.Println("accept", ret)
+	}
+	return ret
 }
 
 func (c *Context) Update(targname *uint16, out, in *SecBufferDesc) syscall.Errno {
@@ -147,7 +157,7 @@ func (c *Context) Release() error {
 	}
 	ret := DeleteSecurityContext(c.Handle)
 	if ret != SEC_E_OK {
-		return ret
+		return errors.Wrap(ret, "DeleteSecurityContext")
 	}
 	return nil
 }
@@ -160,7 +170,7 @@ func (c *Context) Expiry() time.Time {
 func (c *Context) ImpersonateUser() error {
 	ret := ImpersonateSecurityContext(c.Handle)
 	if ret != SEC_E_OK {
-		return ret
+		return errors.Wrap(ret, "ImpersonateSecurityContext")
 	}
 	return nil
 }
@@ -168,7 +178,7 @@ func (c *Context) ImpersonateUser() error {
 func (c *Context) RevertToSelf() error {
 	ret := RevertSecurityContext(c.Handle)
 	if ret != SEC_E_OK {
-		return ret
+		return errors.Wrap(ret, "RevertSecurityContext")
 	}
 	return nil
 }
@@ -181,7 +191,7 @@ func (c *Context) Sizes() (uint32, uint32, uint32, uint32, error) {
 	var s _SecPkgContext_Sizes
 	ret := QueryContextAttributes(c.Handle, _SECPKG_ATTR_SIZES, (*byte)(unsafe.Pointer(&s)))
 	if ret != SEC_E_OK {
-		return 0, 0, 0, 0, ret
+		return 0, 0, 0, 0, errors.Wrap(ret, "QueryContextAttributes")
 	}
 	return s.MaxToken, s.MaxSignature, s.BlockSize, s.SecurityTrailer, nil
 }
@@ -196,10 +206,10 @@ func (c *Context) VerifyFlags() error {
 // It should be called after c.Update.
 func (c *Context) VerifySelectiveFlags(flags uint32) error {
 	if valid, missing, extra := verifySelectiveFlags(flags, c.RequestedFlags); !valid {
-		return fmt.Errorf("sspi: invalid flags check: desired=%b requested=%b missing=%b extra=%b", flags, c.RequestedFlags, missing, extra)
+		return errors.Errorf("sspi: invalid flags check: desired=%b requested=%b missing=%b extra=%b", flags, c.RequestedFlags, missing, extra)
 	}
 	if valid, missing, extra := verifySelectiveFlags(flags, c.EstablishedFlags); !valid {
-		return fmt.Errorf("sspi: invalid flags: desired=%b established=%b missing=%b extra=%b", flags, c.EstablishedFlags, missing, extra)
+		return errors.Errorf("sspi: invalid flags: desired=%b established=%b missing=%b extra=%b", flags, c.EstablishedFlags, missing, extra)
 	}
 	return nil
 }
