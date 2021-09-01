@@ -5,6 +5,7 @@ import (
 	"io"
 	"io/ioutil"
 	"net/http"
+	"net/http/cookiejar"
 	"strings"
 
 	"github.com/alexbrainman/sspi"
@@ -28,11 +29,19 @@ type NegotiateSession struct {
 	client  *http.Client
 	authErr error
 	host    string
+	step    int
 }
 
 func NewNegotiateSession(logger *logf.Logger, domain, username, password string) (*NegotiateSession, error) {
+	jar, err := cookiejar.New(nil)
+	if err != nil {
+		return nil, err
+	}
+	client := &http.Client{
+		Jar: jar,
+	}
+
 	var cred *sspi.Credentials
-	var err error
 	if username == "" {
 		cred, err = negotiate.AcquireCurrentUserCredentials()
 	} else {
@@ -54,7 +63,7 @@ func NewNegotiateSession(logger *logf.Logger, domain, username, password string)
 		cred:   cred,
 		ctx:    ctx,
 		token:  initialToken,
-		client: http.DefaultClient,
+		client: client,
 	}, nil
 }
 
@@ -81,7 +90,7 @@ func (s *NegotiateSession) Do(req *http.Request) (*http.Response, error) {
 		logger := s.logger.With(logf.String("url", req.URL.String()), logf.String("method", req.Method))
 		resp, err := s.authenticate(logger, req)
 		if err != nil {
-			// close sessions
+			// close TCP connections
 			s.client.CloseIdleConnections()
 			s.authErr = err
 			return nil, err
@@ -105,12 +114,17 @@ func (s *NegotiateSession) authenticate(logger *logf.Logger, req *http.Request) 
 		if completed {
 			return resp, nil
 		}
+		s.step++
 	}
 }
 
 func (s *NegotiateSession) authenticateStep(logger *logf.Logger, req *http.Request) (*http.Response, bool, error) {
 	// we should not send body before auth
-	req1, err := http.NewRequestWithContext(req.Context(), req.Method, req.URL.String(), nil)
+	var requestBody io.Reader
+	if s.step > 1 {
+		requestBody = req.Body
+	}
+	req1, err := http.NewRequestWithContext(req.Context(), req.Method, req.URL.String(), requestBody)
 	if err != nil {
 		s.authErr = errors.Wrap(err, "NewRequestWithContext failed")
 		return nil, false, s.authErr
@@ -132,17 +146,8 @@ func (s *NegotiateSession) authenticateStep(logger *logf.Logger, req *http.Reque
 	// server authenticated us without negotiation
 	// or just returns an error?
 	if resp1.StatusCode != 401 {
-		logger.Warn("authenticateStep: unexpected status code",
-			logf.Int("status_code", resp1.StatusCode),
-			logf.String("status", resp1.Status),
-		)
-		// retry original request
-		resp, err := s.client.Do(req)
-		if err != nil {
-			return nil, false, errors.Wrap(err, "Do failed")
-		}
 		// close body in caller, as usual
-		return resp, true, nil
+		return resp1, true, nil
 	}
 	// close body by ourselves
 	defer resp1.Body.Close()
