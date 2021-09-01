@@ -22,18 +22,24 @@ func Execute(config *Config) error {
 }
 
 func executeInner(logger *logf.Logger, config *Config) error {
-	// client := http.Client{
-	// 	//Transport: ,
-	// }
-	client := http.DefaultClient
+	session, err := NewNegotiateSession(logger, "", "", "")
+	if err != nil {
+		return err
+	}
+	defer func() {
+		err = session.Close()
+		if err != nil {
+			logger.Warn("session.Close failed", logf.Error(err))
+		}
+	}()
 
 	req, err := http.NewRequest(config.Method, config.URL, strings.NewReader(config.Body))
 	if err != nil {
 		return errors.Wrap(err, "NewRequest")
 	}
-	resp, err := client.Do(req)
+	resp, err := session.Do(req)
 	if err != nil {
-		return errors.Wrap(err, "client.Do")
+		return err
 	}
 
 	defer func() {
@@ -42,6 +48,11 @@ func executeInner(logger *logf.Logger, config *Config) error {
 			logger.Warn("Close failed", logf.Error(err))
 		}
 	}()
+
+	fmt.Printf("%d %s\n", resp.StatusCode, resp.Status)
+	for k, v := range resp.Header {
+		fmt.Printf("%s: %s\n", k, v)
+	}
 
 	body, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
