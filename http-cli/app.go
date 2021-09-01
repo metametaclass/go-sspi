@@ -22,7 +22,7 @@ func Execute(config *Config) error {
 }
 
 func executeInner(logger *logf.Logger, config *Config) error {
-	session, err := NewNegotiateSession(logger, "", "", "")
+	session, err := NewNegotiateSession(logger, "", config.Username, config.Password)
 	if err != nil {
 		return err
 	}
@@ -36,6 +36,10 @@ func executeInner(logger *logf.Logger, config *Config) error {
 	req, err := http.NewRequest(config.Method, config.URL, strings.NewReader(config.Body))
 	if err != nil {
 		return errors.Wrap(err, "NewRequest")
+	}
+	for _, h := range config.Headers {
+		pair := strings.SplitN(h, ":", 2)
+		req.Header.Add(pair[0], pair[1])
 	}
 	resp, err := session.Do(req)
 	if err != nil {

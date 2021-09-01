@@ -23,15 +23,17 @@ func NewRootCommand() *cobra.Command {
 			cfg.URL = args[0]
 			return Execute(cfg)
 		},
-		Example: "http-cli -m POST -b \"{}\" http://127.0.0.1:5985/wsman",
+		Example:      "http-cli -m POST -b \"{}\" http://127.0.0.1:5985/wsman",
+		SilenceUsage: true,
 	}
-	rootCmd.PersistentFlags().StringVarP(&cfg.LogLevel, "level", "l", "GET", "log level")
+	rootCmd.PersistentFlags().StringVarP(&cfg.LogLevel, "level", "l", "info", "log level")
 	rootCmd.PersistentFlags().StringVarP(&cfg.Method, "method", "m", "GET", "method")
 	rootCmd.PersistentFlags().StringVarP(&cfg.Body, "body", "b", "", "body")
 	rootCmd.PersistentFlags().BoolVarP(&cfg.HexDump, "hex", "x", false, "show response hex dump")
 	rootCmd.PersistentFlags().StringVarP(&cfg.Username, "username", "u", "", "username")
 	rootCmd.PersistentFlags().StringVarP(&cfg.Password, "password", "p", "", "password")
 	rootCmd.PersistentFlags().StringVarP(&cfg.Package, "package", "P", "", "password")
+	rootCmd.PersistentFlags().StringArrayVarP(&cfg.Headers, "headers", "H", nil, "additional headers")
 
 	return rootCmd
 }

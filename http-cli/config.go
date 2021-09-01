@@ -12,6 +12,7 @@ type Config struct {
 	Password string
 	// SSPI auth package
 	Package string
+	Headers []string
 }
 
 func NewConfig() *Config {
