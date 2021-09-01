@@ -7,7 +7,6 @@
 package sspi
 
 import (
-	"fmt"
 	"syscall"
 	"time"
 	"unsafe"
@@ -128,18 +127,12 @@ func NewServerContext(cred *Credentials, flags uint32) *Context {
 func initialize(c *Context, targname *uint16, h, newh *CtxtHandle, out, in *SecBufferDesc) syscall.Errno {
 	ret := InitializeSecurityContext(&c.Cred.Handle, h, targname, c.RequestedFlags,
 		0, SECURITY_NATIVE_DREP, in, 0, newh, out, &c.EstablishedFlags, &c.expiry)
-	if ret != SEC_E_OK {
-		fmt.Println("initialize", ret)
-	}
 	return ret
 }
 
 func accept(c *Context, targname *uint16, h, newh *CtxtHandle, out, in *SecBufferDesc) syscall.Errno {
 	ret := AcceptSecurityContext(&c.Cred.Handle, h, in, c.RequestedFlags,
 		SECURITY_NATIVE_DREP, newh, out, &c.EstablishedFlags, &c.expiry)
-	if ret != SEC_E_OK {
-		fmt.Println("accept", ret)
-	}
 	return ret
 }
 
