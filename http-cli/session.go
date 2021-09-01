@@ -77,7 +77,9 @@ func (s *NegotiateSession) Do(req *http.Request) (*http.Response, error) {
 	if s.host == "" {
 		//first request
 		s.host = req.Host
-		resp, err := s.authenticate(req)
+		s.logger = s.logger.With(logf.String("host", req.Host))
+		logger := s.logger.With(logf.String("url", req.URL.String()), logf.String("method", req.Method))
+		resp, err := s.authenticate(logger, req)
 		if err != nil {
 			// close sessions
 			s.client.CloseIdleConnections()
@@ -89,14 +91,14 @@ func (s *NegotiateSession) Do(req *http.Request) (*http.Response, error) {
 	} else if s.host != req.Host {
 		return nil, errors.Errorf("Do: multiple hosts not supported: %s!=%s", s.host, req.Host)
 	}
-
+	s.logger.Debug("http_request", logf.String("url", req.URL.String()), logf.String("method", req.Method))
 	// should we retry auth if subsequent calls returns 401, for example, after network connection reset?
 	return s.client.Do(req)
 }
 
-func (s *NegotiateSession) authenticate(req *http.Request) (*http.Response, error) {
+func (s *NegotiateSession) authenticate(logger *logf.Logger, req *http.Request) (*http.Response, error) {
 	for {
-		resp, completed, err := s.authenticateStep(req)
+		resp, completed, err := s.authenticateStep(logger, req)
 		if err != nil {
 			return nil, err
 		}
@@ -106,24 +108,31 @@ func (s *NegotiateSession) authenticate(req *http.Request) (*http.Response, erro
 	}
 }
 
-func (s *NegotiateSession) authenticateStep(req *http.Request) (*http.Response, bool, error) {
+func (s *NegotiateSession) authenticateStep(logger *logf.Logger, req *http.Request) (*http.Response, bool, error) {
 	// we should not send body before auth
 	req1, err := http.NewRequestWithContext(req.Context(), req.Method, req.URL.String(), nil)
 	if err != nil {
 		s.authErr = errors.Wrap(err, "NewRequestWithContext failed")
 		return nil, false, s.authErr
 	}
+	authorization := "Negotiate " + base64.StdEncoding.EncodeToString(s.token)
+	logger.Debug("authenticateStep: request", logf.String("authorization_header", authorization))
 	// add token header
-	req1.Header.Add("Authorization", "Negotiate "+base64.StdEncoding.EncodeToString(s.token))
+	req1.Header.Add("Authorization", authorization)
 	resp1, err := s.client.Do(req1)
 	if err != nil {
 		s.authErr = errors.Wrap(err, "Do: client.Do failed")
 		return nil, false, s.authErr
 	}
+	for k, v := range resp1.Header {
+		for _, vv := range v {
+			logger.Debug("header", logf.String("name", k), logf.String("value", vv))
+		}
+	}
 	// server authenticated us without negotiation
 	// or just returns an error?
 	if resp1.StatusCode != 401 {
-		s.logger.Warn("authenticateStep: unexpected status code",
+		logger.Warn("authenticateStep: unexpected status code",
 			logf.Int("status_code", resp1.StatusCode),
 			logf.String("status", resp1.Status),
 		)
@@ -135,16 +144,18 @@ func (s *NegotiateSession) authenticateStep(req *http.Request) (*http.Response, 
 		// close body in caller, as usual
 		return resp, true, nil
 	}
-	// close body by ourself
+	// close body by ourselves
 	defer resp1.Body.Close()
-	// we don`t need body of auth exchange
-	_, err = ioutil.ReadAll(resp1.Body)
+
+	body, err := ioutil.ReadAll(resp1.Body)
 	if err != nil {
 		s.logger.Warn("ReadAll failed", logf.Error(err))
 	}
+	logger.Debug("authenticateStep: body", logf.Bytes("body_bytes", body), logf.String("body", string(body)))
 	authHeaders, found := resp1.Header["Www-Authenticate"]
 	if !found {
-		s.authErr = errors.Errorf("Www-Authenticate header not found")
+		logger.Error("Www-Authenticate header not found")
+		s.authErr = errors.Errorf("authentication failed")
 		return nil, false, s.authErr
 	}
 	var negotiateData string
@@ -157,6 +168,7 @@ func (s *NegotiateSession) authenticateStep(req *http.Request) (*http.Response, 
 		s.authErr = errors.Errorf("Www-Authenticate Negotiate header not found")
 		return nil, false, s.authErr
 	}
+	logger.Debug("authenticateStep: token ", logf.String("negotiate_data", negotiateData))
 	token, err := base64.StdEncoding.DecodeString(negotiateData)
 	if err != nil {
 		s.authErr = errors.Wrapf(err, "DecodeString failed for Negotiate header %s", negotiateData)
@@ -168,9 +180,10 @@ func (s *NegotiateSession) authenticateStep(req *http.Request) (*http.Response, 
 	}
 	if completed {
 		// finish authentication and perform original request
-		//req1.Header.Add("Www-Authenticate", base64.StdEncoding.EncodeToString(s.initialToken))
 		s.token = nil
-		req.Header.Set("Authorization", "Negotiate "+base64.StdEncoding.EncodeToString(token))
+		authorization := "Negotiate " + base64.StdEncoding.EncodeToString(token)
+		logger.Debug("authenticateStep: finalize", logf.String("authorization_header", authorization))
+		req.Header.Set("Authorization", authorization)
 		resp, err := s.client.Do(req)
 		if err != nil {
 			return nil, false, errors.Wrap(err, "Do failed")
