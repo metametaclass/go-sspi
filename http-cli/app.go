@@ -1,9 +1,11 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"io/ioutil"
 	"net/http"
+	"net/http/httptrace"
 	"strings"
 
 	"github.com/pkg/errors"
@@ -33,7 +35,47 @@ func executeInner(logger *logf.Logger, config *Config) error {
 		}
 	}()
 
-	req, err := http.NewRequest(config.Method, config.URL, strings.NewReader(config.Body))
+	err = performRequest(logger, config, session)
+	if err != nil {
+		return errors.Wrap(err, "first request failed")
+	}
+
+	// err = performRequest(logger, config, session)
+	// if err != nil {
+	// 	return errors.Wrap(err, "second request failed")
+	// }
+
+	return nil
+}
+
+func performRequest(logger *logf.Logger, config *Config, session *NegotiateSession) error {
+	context := context.Background()
+
+	if config.IsTrace {
+		trace := &httptrace.ClientTrace{
+			DNSDone: func(dnsInfo httptrace.DNSDoneInfo) {
+				logger.Debug("DNSDone", logf.Any("info", dnsInfo))
+			},
+			GotConn: func(connInfo httptrace.GotConnInfo) {
+				logger.Debug("GotConn", logf.Any("info", connInfo))
+			},
+			PutIdleConn: func(err error) {
+				logger.Debug("PutIdleConn", logf.Error(err))
+			},
+			GetConn: func(hostport string) {
+				logger.Debug("GetConn", logf.String("hostport", hostport))
+			},
+			ConnectStart: func(network, addr string) {
+				logger.Debug("ConnectStart", logf.String("network", network), logf.String("addr", addr))
+			},
+			ConnectDone: func(network, addr string, err error) {
+				logger.Debug("ConnectDone", logf.String("network", network), logf.String("addr", addr), logf.Error(err))
+			},
+		}
+		context = httptrace.WithClientTrace(context, trace)
+	}
+
+	req, err := http.NewRequestWithContext(context, config.Method, config.URL, strings.NewReader(config.Body))
 	if err != nil {
 		return errors.Wrap(err, "NewRequest")
 	}
@@ -53,9 +95,9 @@ func executeInner(logger *logf.Logger, config *Config) error {
 		}
 	}()
 
-	fmt.Printf("%d %s\n", resp.StatusCode, resp.Status)
+	fmt.Printf("Status: %d %s\n", resp.StatusCode, resp.Status)
 	for k, v := range resp.Header {
-		fmt.Printf("%s: %s\n", k, v)
+		fmt.Printf("Header %s: %s\n", k, v)
 	}
 
 	body, err := ioutil.ReadAll(resp.Body)

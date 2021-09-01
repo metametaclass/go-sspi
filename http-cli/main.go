@@ -30,6 +30,7 @@ func NewRootCommand() *cobra.Command {
 	rootCmd.PersistentFlags().StringVarP(&cfg.Method, "method", "m", "GET", "method")
 	rootCmd.PersistentFlags().StringVarP(&cfg.Body, "body", "b", "", "body")
 	rootCmd.PersistentFlags().BoolVarP(&cfg.HexDump, "hex", "x", false, "show response hex dump")
+	rootCmd.PersistentFlags().BoolVarP(&cfg.IsTrace, "trace", "t", false, "trace golang http client")
 	rootCmd.PersistentFlags().StringVarP(&cfg.Username, "username", "u", "", "username")
 	rootCmd.PersistentFlags().StringVarP(&cfg.Password, "password", "p", "", "password")
 	rootCmd.PersistentFlags().StringVarP(&cfg.Package, "package", "P", "", "password")

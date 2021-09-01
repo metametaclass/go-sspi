@@ -13,6 +13,7 @@ type Config struct {
 	// SSPI auth package
 	Package string
 	Headers []string
+	IsTrace bool
 }
 
 func NewConfig() *Config {
