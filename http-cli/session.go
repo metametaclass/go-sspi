@@ -237,3 +237,12 @@ func consumeBody(logger *logf.Logger, body io.ReadCloser) {
 	}
 	logger.Debug("consumeBody", logf.Bytes("body_bytes", bodyBytes), logf.String("body", string(bodyBytes)))
 }
+
+func (s *NegotiateSession) EncryptMessage(data []byte) ([]byte, error) {
+	return s.ctx.EncryptMessage(data, 0, 0)
+}
+
+func (s *NegotiateSession) DecryptMessage(data []byte) ([]byte, error) {
+	_, data, err := s.ctx.DecryptMessage(data, 0)
+	return data, err
+}

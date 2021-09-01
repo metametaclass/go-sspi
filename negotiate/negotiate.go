@@ -86,7 +86,7 @@ type ClientContext struct {
 // (SPN) or the security context of the destination server.
 // NewClientContext returns a new token to be sent to the server.
 func NewClientContext(cred *sspi.Credentials, targetName string) (cc *ClientContext, outputToken []byte, err error) {
-	return NewClientContextWithFlags(cred, targetName, sspi.ISC_REQ_CONNECTION)
+	return NewClientContextWithFlags(cred, targetName, sspi.ISC_REQ_CONNECTION|sspi.ISC_REQ_CONFIDENTIALITY)
 }
 
 // NewClientContextWithFlags creates a new client context. It uses client
