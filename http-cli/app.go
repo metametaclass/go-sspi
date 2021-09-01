@@ -37,15 +37,19 @@ func executeInner(logger *logf.Logger, config *Config) error {
 
 	err = performRequest(logger, config, session)
 	if err != nil {
-		return errors.Wrap(err, "first request failed")
+		logger.Error("first request failed", logf.Error(err))
 	}
 
-	// err = performRequest(logger, config, session)
-	// if err != nil {
-	// 	return errors.Wrap(err, "second request failed")
-	// }
+	if config.Method != http.MethodPost {
+		// repeat request for test
+		err2 := performRequest(logger, config, session)
+		if err2 != nil {
+			logger.Error("second request failed", logf.Error(err2))
+			return errors.Wrap(err2, "second request failed")
+		}
+	}
 
-	return nil
+	return err
 }
 
 func performRequest(logger *logf.Logger, config *Config, session *NegotiateSession) error {
