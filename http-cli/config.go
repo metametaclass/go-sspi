@@ -5,6 +5,7 @@ type Config struct {
 	LogLevel string
 	Method   string
 	Body     string
+	HexDump  bool
 	URL      string
 	// credentials
 	Username string

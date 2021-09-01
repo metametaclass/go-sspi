@@ -22,9 +22,10 @@ func Execute(config *Config) error {
 }
 
 func executeInner(logger *logf.Logger, config *Config) error {
-	client := http.Client{
-		//Transport: ,
-	}
+	// client := http.Client{
+	// 	//Transport: ,
+	// }
+	client := http.DefaultClient
 
 	req, err := http.NewRequest(config.Method, config.URL, strings.NewReader(config.Body))
 	if err != nil {
@@ -47,6 +48,10 @@ func executeInner(logger *logf.Logger, config *Config) error {
 		return errors.Wrapf(err, "ReadAll failed")
 	}
 
-	fmt.Println(body)
+	if config.HexDump {
+		fmt.Println(HexDump(body))
+	} else {
+		fmt.Println(string(body))
+	}
 	return nil
 }
