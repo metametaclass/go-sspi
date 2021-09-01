@@ -145,35 +145,10 @@ func (s *NegotiateSession) authenticateStep(logger *logf.Logger, req *http.Reque
 			logger.Debug("header", logf.String("name", k), logf.String("value", vv))
 		}
 	}
-	negotiateData := ""
-	hasNegotiate := false
-	authHeaders, found := resp1.Header["Www-Authenticate"]
-
-	if found {
-		for _, h := range authHeaders {
-			hasNegotiate = strings.HasPrefix(h, "Negotiate")
-			if hasNegotiate {
-				if len(h) >= 10 {
-					negotiateData = h[10:]
-				}
-				break
-			}
-		}
-	}
-
-	// we return not-nil response on error to consume and close body in one place
-	if resp1.StatusCode == http.StatusUnauthorized && negotiateData == "" {
-		switch {
-		case !found:
-			logger.Error("Www-Authenticate header not found")
-			return resp1, false, errors.Errorf("authentication failed: Www-Authenticate header not found")
-		case hasNegotiate:
-			logger.Error("Negotiate without token, invalid credentials")
-			return resp1, false, errors.Errorf("authentication failed: invalid credentials")
-		default:
-			logger.Error("Www-Authenticate Negotiate header not found. Negotiate is not supported")
-			return resp1, false, errors.Errorf("authentication failed: negotiate is not supported")
-		}
+	negotiateData, err := findNegotiateHeader(logger, resp1)
+	if err != nil {
+		// we return not-nil response on error to consume and close body in one place
+		return resp1, false, err
 	}
 
 	completed := true
@@ -196,17 +171,56 @@ func (s *NegotiateSession) authenticateStep(logger *logf.Logger, req *http.Reque
 		// close body in caller, as usual
 		return resp1, true, nil
 	}
-	consumeBody(logger, resp1.Body)
-	// continue authentication exchange
 	// close body by ourselves
+	consumeBody(logger, resp1.Body)
 
 	// not completed, but status code is not 401
 	if resp1.StatusCode != http.StatusUnauthorized {
 		s.authErr = errors.Errorf("Authentication not completed with incorrect status code %d %s", resp1.StatusCode, resp1.Status)
 		return nil, false, s.authErr
 	}
+	// continue authentication exchange
 
 	return nil, false, nil
+}
+
+func findNegotiateHeader(logger *logf.Logger, resp *http.Response) (string, error) {
+	negotiateData := ""
+	hasNegotiate := false
+	authHeaders, found := resp.Header["Www-Authenticate"]
+
+	if found {
+		for _, h := range authHeaders {
+			hasNegotiate = strings.HasPrefix(h, "Negotiate")
+			if hasNegotiate {
+				if len(h) >= 10 {
+					negotiateData = h[10:]
+				}
+				break
+			}
+		}
+	}
+
+	// has negotiate data in header or there is no need for data
+	if negotiateData != "" || resp.StatusCode != http.StatusUnauthorized {
+		return negotiateData, nil
+	}
+
+	// process possible errors
+	switch {
+	case !found:
+		// no header at all
+		logger.Error("Www-Authenticate header not found")
+		return "", errors.Errorf("authentication failed: Www-Authenticate header not found")
+	case hasNegotiate:
+		// empty Www-Authenticate negotiate header - server doesn`t like our initial token
+		logger.Error("Negotiate without token, invalid credentials")
+		return "", errors.Errorf("authentication failed: invalid credentials")
+	default:
+		// has other headers but no Negotiate
+		logger.Error("Www-Authenticate Negotiate header not found. Negotiate is not supported")
+		return "", errors.Errorf("authentication failed: negotiate is not supported")
+	}
 }
 
 func consumeBody(logger *logf.Logger, body io.ReadCloser) {
